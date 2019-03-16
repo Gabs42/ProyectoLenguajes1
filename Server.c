@@ -72,7 +72,6 @@ struct Cliente encontrarClienteUsuario(char * Usuario) {
 
 int elimiarCliente(char * Usuario) {
 	int contadorActual = 0;
-	int contadorAnterior = 0;
 	
 	while(contadorActual!= *contadorClientes) {
 		if(strcmp(Clientes[contadorActual].Usuario, Usuario) == 0){
@@ -110,7 +109,7 @@ int insertarNuevoCliente(struct Cliente * ClInsertar) {
 }
 
 
-int imprimirClientes() {
+void imprimirClientes() {
 	//struct Cliente * clienteActual = Clientes;
 	int contador = 0;
 	
@@ -176,8 +175,6 @@ void loopConeccion(int newIdSocket, struct sockaddr_in dirCliente) {
 		}
 	}else {
 		if(strchr(mensaje, ':') != NULL) {
-			socklen_t tamanioCliente;
-			
 			char * usuario = strtok(mensaje, ":");
 			//printf("%s\n",usuario);
 			
@@ -227,12 +224,9 @@ int main(int argc, char * argv[]) {
 	int numeroPuerto, idSocket, forkID;
 	socklen_t tamanioCliente;
 	
-	char mensaje[256]; // Aqui se guarda el mensaje que se recibe del cliente
-	
 	// sockaddr_in es una strcutura de la netinite/in.h aqui se crean dos de ellas
 	struct sockaddr_in dirServer, dirCliente;
 	
-	int n;
 	if(argc < 2) {
 		fprintf(stderr, "No se dio un puerto\n");
 		exit(1);
