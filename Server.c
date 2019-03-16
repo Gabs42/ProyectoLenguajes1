@@ -25,12 +25,11 @@ struct Cliente * Clientes;
 
 
 // Encuentra en que posicion de la lista esta el cliente basado en el id de su socket
-struct Cliente encontrarCliente(unsigned short idSocketCliente) {
-	//printf("%i,%i\n",idSocketCliente,*(&Clientes->idSocket));
+struct Cliente encontrarCliente(unsigned short clientSocketId) {
 	int contador = 0;
 
 	while(contador != *contadorClientes) {
-		if(Clientes[contador].idSocket.sin_port == idSocketCliente){
+		if(Clientes[contador].idSocket.sin_port == clientSocketId){
 			return Clientes[contador];
 		}
 		contador++;
@@ -133,26 +132,26 @@ void error(const char * msg) {
 }
 
 
-void loopConeccion(int newIdSocket, struct sockaddr_in dirCliente) {
+void loopConeccion(int clientSocketId, struct sockaddr_in dirCliente) {
 	char respuesta[50];
 	char mensaje[256];
 	int n;
 	
 	bzero(mensaje, 256); // Vacia el mensaje donde se recibira el mensaje
 	
-	n = recv(newIdSocket, mensaje, 255, 0); // Lee el mensaje del usuario
+	n = recv(clientSocketId, mensaje, 255, 0); // Lee el mensaje del usuario
 	
 	if(n < 0) {
 		error("Error leyendo inf de socket");
 	}
 	
-	printf("%i\n",newIdSocket);
+	printf("Client socket id: %hu\n", clientSocketId);
 	
 	if(strcmp(mensaje, "$S\n") == 0) {
 		printf("Se entro a adios\n");
-		strcat(respuesta, "Adios");
-		struct Cliente ClienteAEliminar = encontrarCliente(dirCliente.sin_port);
-		elimiarCliente(ClienteAEliminar.Usuario);
+		strcpy(respuesta, "Adios");
+		struct Cliente clienteAEliminar = encontrarCliente(dirCliente.sin_port);
+		elimiarCliente(clienteAEliminar.Usuario);
 		*contadorClientes -= 1;
 	}else if(mensaje[0] == '#') {
 		int resultado = ClienteRepetido(mensaje);
@@ -164,7 +163,7 @@ void loopConeccion(int newIdSocket, struct sockaddr_in dirCliente) {
 			struct Cliente nuevoCliente = {};
 			strcpy(nuevoCliente.Usuario, mensaje);
 			nuevoCliente.idSocket = dirCliente;
-			nuevoCliente.idSocketPers = newIdSocket;
+			nuevoCliente.idSocketPers = clientSocketId;
 			//*Clientes=nuevoCliente;
 			insertarNuevoCliente(&nuevoCliente);
 			*contadorClientes += 1;
@@ -186,9 +185,9 @@ void loopConeccion(int newIdSocket, struct sockaddr_in dirCliente) {
 			
 			printf("%s:%i\n", ClienteAEnviar.Usuario, ClienteAEnviar.idSocketPers);
 			
-			printf("New id Socket bef: %i\n", newIdSocket);
-			newIdSocket = ClienteAEnviar.idSocketPers;
-			printf("New id Socket af: %i\n",newIdSocket);
+			printf("New id Socket bef: %i\n", clientSocketId);
+			clientSocketId = ClienteAEnviar.idSocketPers;
+			printf("New id Socket af: %i\n",clientSocketId);
 			
 			strcat(respuesta, ClienteEnviando.Usuario);
 			strcat(respuesta, msj);
@@ -201,9 +200,9 @@ void loopConeccion(int newIdSocket, struct sockaddr_in dirCliente) {
 		}
 	}
 	
-	printf("Se va a enviar a: %i\n", newIdSocket);
+	printf("Se va a enviar a: %i\n", clientSocketId);
 	
-	n = send(newIdSocket, respuesta, strlen(respuesta), 0); // Se envia mensaje de exito al cliente
+	n = send(clientSocketId, respuesta, strlen(respuesta), 0); // Se envia mensaje de exito al cliente
 	
 	if(n < 0) {
 		error("Error enviando inf a socket");
