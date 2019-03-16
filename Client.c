@@ -7,6 +7,9 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include <signal.h>
+#include <sys/ioctl.h>
+
+#define Green "\x1B[32m"
 
 void error(const char *msg)//muestra los diversos mensajes de error que pueden ocurrir y cierra el cliente0
 {
@@ -22,6 +25,7 @@ int main(int argc, char *argv[])
     struct hostent *server;//hostsent es una estructura de netdb.h
 
     char mensaje[256];//mensaje del mensaje que se va a enviar
+    struct winsize ventana;
     if (argc < 3) {
        exit(0);
     }
@@ -43,6 +47,7 @@ int main(int argc, char *argv[])
     if (connect(idSocket,(struct sockaddr *) &dirServer,sizeof(dirServer)) < 0){//se llamma a connect para realizar una coneccion con el server el segundo argumento es el server
         error("No se pudo conectar");
       }
+    ioctl(STDOUT_FILENO,TIOCGWINSZ,&ventana);
     printf("Ingrese su Usuario: ");
     bzero(mensaje,256);//se reinicia el mensaje antes de pedir el mensaje
     fgets(mensaje,255,stdin);//se lee el mensaje
@@ -77,7 +82,8 @@ int main(int argc, char *argv[])
           n = recv(idSocket,mensaje,255,0);//se recibe respuesta de server
           if (n < 0)
                error("Error leyendo del socket");
-          printf("%s\n",mensaje);//se imprime la respuesta
+          printf(Green "%*s\n",ventana.ws_col, mensaje);
+          //printf("%s\n",mensaje);//se imprime la respuesta
           if(strstr(mensaje,"Adios")!=NULL){
             kill(forkID,SIGKILL);
             break;

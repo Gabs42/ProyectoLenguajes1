@@ -175,6 +175,7 @@ void loopConeccion(int newIdSocket,struct sockaddr_in dirCliente){
       //printf("%i",*contadorClientes);
       struct Cliente posCliente = encontrarCliente(dirCliente.sin_port);
       printf("%s:%s\n",posCliente.Usuario,mensaje);
+      strcat(respuesta,"Se recibio el msj");
     }
   }
   printf("Se va a enviar a:%i\n",newIdSocket );
