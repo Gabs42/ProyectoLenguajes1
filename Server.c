@@ -214,15 +214,12 @@ void loopConeccion(int newIdSocket, struct sockaddr_in dirCliente) {
 
 int main(int argc, char * argv[]) {
 	contadorClientes = mmap(NULL, sizeof(* contadorClientes), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-	Clientes = mmap(NULL, 20 * sizeof(struct Cliente), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+	Clientes = mmap(NULL, 20 * sizeof(struct Cliente), PROT_READ | PROT_WRITE, MAP_SHARED| MAP_ANONYMOUS, -1, 0);
 	
 	strcpy(Clientes[0].Usuario, "PAas");
-	//printf("%s\n",Clientes[0].Usuario);
-	
 	strcpy(Clientes[1].Usuario," PAasasdas");
 	
 	int numeroPuerto, idSocket, forkID;
-	socklen_t tamanioCliente;
 	
 	// sockaddr_in es una strcutura de la netinite/in.h aqui se crean dos de ellas
 	struct sockaddr_in dirServer, dirCliente;
@@ -234,7 +231,7 @@ int main(int argc, char * argv[]) {
 	
 	// socket() crea un nuevo socket AF_INET indica que se van a comunicar por internet, SOCK_STREAM es el tipo de socket que sera
 	idSocket = socket(AF_INET, SOCK_STREAM, 0);
-	if(idSocket < 0){
+	if(idSocket < 0) {
 		error("Error iniciando socket");
 	}
 
@@ -246,37 +243,45 @@ int main(int argc, char * argv[]) {
 	dirServer.sin_addr.s_addr = INADDR_ANY;
 	dirServer.sin_port = htons(numeroPuerto);
 	
-	if(bind(idSocket, (struct sockaddr *) &dirServer, sizeof(dirServer)) < 0) { // Bind conecta el socket
+	// Assign the server's address to the socket
+	if(bind(idSocket, (struct sockaddr *) &dirServer, sizeof(dirServer)) < 0) {
 		error("Error conectando con cliente");
 	}
 
-	listen(idSocket, 5); // El socket se frena y empieza a escuchar cualquier coneccion posible
-	tamanioCliente = sizeof(dirCliente);
+	// Make the socket accept incoming connection requests
+	listen(idSocket, 5);
+	socklen_t clientAddressSize = sizeof(dirCliente);
 	
 	while(1) {
 		// Bloquea el programa hasta que un cliente se conecte al server:
-		int newIdSocket = accept(idSocket, (struct sockaddr *) &dirCliente, &tamanioCliente);
+		int clientSocketId = accept(idSocket, (struct sockaddr *) &dirCliente, &clientAddressSize);
 		
-		printf("%hu\n", newIdSocket);
-		
-		if(newIdSocket < 0) {
+		if(clientSocketId < 0) {
 			error("Error aceptando nuevo socket");
 		}
 		
+		printf("New client connected with socket ID: %hu\n", clientSocketId);
+		
 		forkID = fork();
 		
-		if(forkID < 0){
+		if(forkID < 0) {
 			error("Fork Fallo");
 		}else if(forkID == 0) {
 			// Child process
-			//close(idSocket);
+			
+			// Close the server socket from the child process:
+			close(idSocket);
+			
 			while(1) {
-				loopConeccion(newIdSocket, dirCliente);
+				loopConeccion(clientSocketId, dirCliente);
 			}
 
 			exit(0);
 		}else {
-			//close(newIdSocket);
+			// Server process
+			
+			// Close the client socket from the server process:
+			close(clientSocketId);
 		}
 	}
 	
