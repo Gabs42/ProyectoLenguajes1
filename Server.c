@@ -214,7 +214,7 @@ void loopConeccion(int newIdSocket, struct sockaddr_in dirCliente) {
 
 int main(int argc, char * argv[]) {
 	contadorClientes = mmap(NULL, sizeof(* contadorClientes), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-	Clientes = (struct Cliente *)mmap(NULL,20*sizeof(struct Cliente), PROT_READ | PROT_WRITE, MAP_SHARED|MAP_ANONYMOUS, -1, 0);
+	Clientes = mmap(NULL, 20 * sizeof(struct Cliente), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 	
 	strcpy(Clientes[0].Usuario, "PAas");
 	//printf("%s\n",Clientes[0].Usuario);
