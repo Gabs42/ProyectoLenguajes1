@@ -22,6 +22,15 @@ int writePort(char *ptr_port)
 	return 0;
 }
 
+//Recives an int to be written as a port
+//Does a conversion to string and uses writePort()
+int writePortInt(int port)
+{
+	char strPort[10];
+	sprintf(strPort, "%d", port);
+	writePort(strPort);
+}
+
 //Recieves a char[] of a given size, and assigns it a value taken from "port.txt"
 char *readPort(char *buf)
 {
@@ -42,16 +51,34 @@ char *readPort(char *buf)
 	fclose(ptr_file);
 }
 
-/*
+//Converts the result of readPort to int and returns the value;
+int readPortInt()
+{
+	char rPort[10]; 
+	readPort(rPort);
+	return (int) strtol(rPort, (char **)NULL, 10);
+}
+
 int main()
 {
+/*
 	char *wPort = "30";
 	writePort(wPort);
-	
+*/
+/*
+	int wPortInt = 32;
+	writePortInt(wPortInt);
+*/
+/*	
 	char rPort[10]; 
 	readPort(rPort);
 	printf("%s\n", rPort);
-
+*/
+/*
+	int rPortInt = readPortInt();
+	printf("%d\n", rPortInt);
+*/
 	return 0;
 }
-*/
+
+
