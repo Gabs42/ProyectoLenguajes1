@@ -2,6 +2,9 @@
 #include <stdlib.h>
 #include "IOHandler.h"
 
+//Recives a string and writes it to a text file, "port-txt"
+//Returns 0 if the operation was successful
+//Returns 1 if the operation was unsuccessful
 int writePort(char *ptr_port)
 {
 	FILE *ptr_file;
@@ -19,11 +22,10 @@ int writePort(char *ptr_port)
 	return 0;
 }
 
-/*
-char *readPort()
+//Recieves a char[] of a given size, and assigns it a value taken from "port.txt"
+char *readPort(char *buf)
 {
 	FILE *ptr_file;
-	char buf[10];
 	ptr_file = fopen("port.txt", "r");
 
 	if(!ptr_file)
@@ -34,28 +36,22 @@ char *readPort()
 	
 	while(fgets(buf, 10, ptr_file) != NULL)
 	{
-		printf("%s", buf);
+		//printf("%s", buf);
 	}
-	printf("\n");
 
 	fclose(ptr_file);
-
-	return &buf;
 }
-*/
 
+/*
 int main()
 {
-	/*
-	char *port = "2234";
-	writePort(port);
-	*/
-
-	/*
-	char *port; 
-	port = readPort();	
-	printf("%s\n", port);
-	*/
+	char *wPort = "30";
+	writePort(wPort);
+	
+	char rPort[10]; 
+	readPort(rPort);
+	printf("%s\n", rPort);
 
 	return 0;
 }
+*/

@@ -2,6 +2,6 @@
 #define IOHandler_H
 
 int writePort(char*);
-//char *readPort();
+char *readPort(char*);
 
 #endif 
