@@ -1,286 +1,456 @@
 
-/* A simple server in the internet domain using TCP
-The port number is passed as an argument */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <arpa/inet.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <sys/mman.h>
+#include <sys/select.h>
 
 
-struct Cliente {
-	char Usuario[50];
-	int idSocketPers;
-	struct sockaddr_in idSocket;
-	struct Cliente * Siguiente;
+#define MAX_CLIENTS 100
+
+
+struct Client {
+	char username[50];
+	unsigned int socketFd; // The socket's file descriptor.
+	struct sockaddr_in socketAddress;
 };
 
 
-static int * contadorClientes = NULL;
-struct Cliente * Clientes;
+struct ClientSlot {
+	char empty;
+	struct Client client;
+};
 
 
-// Encuentra en que posicion de la lista esta el cliente basado en el id de su socket
-struct Cliente encontrarCliente(unsigned short clientSocketId) {
-	int contador = 0;
+// Used to clean slots:
+const struct ClientSlot EMPTY_CLIENT_SLOT = {1, {{0}, 0, {0}}};
 
-	while(contador != *contadorClientes) {
-		if(Clientes[contador].idSocket.sin_port == clientSocketId){
-			return Clientes[contador];
+
+struct ClientSlot clients[MAX_CLIENTS];
+
+
+/*	Returns the index of the first empty slot in the clients array,
+	or -1 if the array is full.
+*/
+int firstEmptyClientSlot() {
+	// Check each slot
+	for(int i = 0; i < MAX_CLIENTS; i++) {
+		if(clients[i].empty) {
+			return i;
 		}
-		contador++;
 	}
-
-	return Clientes[contador];
+	
+	// No empty slot was found
+	return -1;
 }
 
 
-// Busca si el usuario ya existe en la lista de clientes, retorna 1 si ya existe 0 si no
-int ClienteRepetido(char * Usuario) {
-	int contador = 0;
+/*	Finds the index of the client slot that currently has the given username.
 	
-	while(contador!= *contadorClientes) {
-		if(strcmp(Clientes[contador].Usuario, Usuario) == 0) {
-			return 1;
+	Returns the index of the client slot that has the given username,
+		or -1 if no such slot was found.
+*/
+int findClientByUsername(const char * username) {
+	for(int index = 0; index < MAX_CLIENTS; index++) {
+		if(!(clients[index].empty)) {
+			if(strcmp(clients[index].client.username, username) == 0) {
+				return index;
+			}
 		}
-		contador++;
 	}
 	
-	return 0;
+	// The username was not found.
+	return -1;
 }
 
 
-// Busca si el usuario ya existe en la lista de clientes, retorna 1 si ya existe 0 si no
-struct Cliente encontrarClienteUsuario(char * Usuario) {
-	int contador = 0;
+/*	Checks whether the given username is already being used in a
+	non-empty slot in the clients array.
+
+	Returns 1 if already used, 0 otherwise.
+*/
+int isUsernameAlreadyUsed(const char * username) {
+	int indexFound = findClientByUsername(username);
 	
-	while(contador != *contadorClientes){
-		if(strstr(Clientes[contador].Usuario, Usuario) != NULL){
-			return Clientes[contador];
-		}
-		contador++;
+	if(indexFound == -1) {
+		return 0;
 	}
 	
-	return Clientes[contador];
-}
-
-
-int elimiarCliente(char * Usuario) {
-	int contadorActual = 0;
-	
-	while(contadorActual!= *contadorClientes) {
-		if(strcmp(Clientes[contadorActual].Usuario, Usuario) == 0){
-			strcpy(Clientes[contadorActual].Usuario, "");
-		}
-		contadorActual++;
-	}
-	
-	return 0;
-}
-
-
-int insertarNuevoCliente(struct Cliente * ClInsertar) {
-	printf("New:%s\n", ClInsertar->Usuario);
-	Clientes[*contadorClientes] = *ClInsertar;
-	/*
-	if(*contadorClientes==0){
-	printf("%s\n", "Hai");
-	Clientes[0] = *ClInsertar;
 	return 1;
-	}
-
-	struct Cliente * clienteActual = Clientes;
-
-	while(clienteActual->Siguiente != NULL){
-	printf("%s\n","No");
-	clienteActual = (clienteActual->Siguiente);
-	}
-	printf("%s\n","Si");
-	//clienteActual->Siguiente = malloc(sizeof(struct Cliente));
-	clienteActual->Siguiente = ClInsertar;
-	printf("%s\n","Si2");
-	*/
-	return 0;
 }
 
 
-void imprimirClientes() {
-	//struct Cliente * clienteActual = Clientes;
-	int contador = 0;
-	
-	while(contador != *contadorClientes){
-		printf("%s\n", Clientes[contador].Usuario);
-		contador++;
-	}
-	// while(clienteActual->Siguiente != NULL){
-	//   printf("%s\n",clienteActual->Usuario);
-	//   clienteActual = (clienteActual->Siguiente);
-	// }
-	// printf("%s\n",clienteActual->Usuario);
-	// return 0;
+/*	Frees the slot at the given index.
+
+	(By freeing the slot, the username is also freed).
+*/
+void freeClientSlot(unsigned int clientIndex) {
+	clients[clientIndex] = EMPTY_CLIENT_SLOT;
 }
 
 
-//muestra los diversos mensajes de error y cierra el server
-void error(const char * msg) {
-	perror(msg);
-	exit(1);
+int insertNewClient(unsigned int clientSocketFd, struct sockaddr_in clientAddress) {
+	int slot = firstEmptyClientSlot();
+	
+	if(slot == -1) {
+		// There are no more empty slots.
+		fprintf(stderr, "ERROR: insertNewClient: There are no more slots.\n");
+		return -1;
+	}
+	
+	// Mark slot as not empty:
+	clients[slot].empty = 0;
+	
+	// Write the client's socket information:
+	*(clients[slot].client.username) = '\0'; // Remove any previous username
+	clients[slot].client.socketFd = clientSocketFd;
+	clients[slot].client.socketAddress = clientAddress;
+	
+	return slot;
 }
 
 
-void loopConeccion(int clientSocketId, struct sockaddr_in dirCliente) {
-	char respuesta[50];
-	char mensaje[256];
-	int n;
-	
-	bzero(mensaje, 256); // Vacia el mensaje donde se recibira el mensaje
-	
-	n = recv(clientSocketId, mensaje, 255, 0); // Lee el mensaje del usuario
-	
-	if(n < 0) {
-		error("Error leyendo inf de socket");
+/*	Prints the contents of the given struct Client, with the given indentation.
+*/
+void printClient(struct Client client, char * indentation) {
+	if(indentation == NULL) {
+		indentation = "";
 	}
 	
-	printf("Client socket id: %hu\n", clientSocketId);
+	char addressBuffer[INET_ADDRSTRLEN];
 	
-	if(strcmp(mensaje, "$S\n") == 0) {
-		printf("Se entro a adios\n");
-		strcpy(respuesta, "Adios");
-		struct Cliente clienteAEliminar = encontrarCliente(dirCliente.sin_port);
-		elimiarCliente(clienteAEliminar.Usuario);
-		*contadorClientes -= 1;
-	}else if(mensaje[0] == '#') {
-		int resultado = ClienteRepetido(mensaje);
-		
-		if(resultado == 1) {
-			printf("Repetido\n");
-			strcat(respuesta, "El usuario ya existe");
+	inet_ntop(AF_INET, &client.socketAddress.sin_addr, addressBuffer, INET_ADDRSTRLEN);
+	
+	printf("%sclient.username: %s\n", indentation, client.username);
+	printf("%sclient.socketFd: %u\n", indentation, client.socketFd);
+	printf("%sclient.sockaddr_in.sin_family: AF_INET\n", indentation);
+	printf("%sclient.sockaddr_in.sin_port: %d\n", indentation, ntohs(client.socketAddress.sin_port));
+	printf("%sclient.sockaddr_in.sin_addr: %s\n\n", indentation, addressBuffer);
+}
+
+
+/*	Prints the contents of the given struct Client, with the given indentation in a single line.
+*/
+void printClientOneLine(struct Client client, char * indentation) {
+	if(indentation == NULL) {
+		indentation = "";
+	}
+	
+	char addressBuffer[INET_ADDRSTRLEN];
+	
+	inet_ntop(AF_INET, &client.socketAddress.sin_addr, addressBuffer, INET_ADDRSTRLEN);
+	
+	printf("%s(username: \"%s\", ", indentation, client.username);
+	printf("socketFd: %u, ", client.socketFd);
+	printf("sockaddr_in.sin_family: AF_INET, ");
+	printf("sockaddr_in.sin_port: %d, ", ntohs(client.socketAddress.sin_port));
+	printf("sockaddr_in.sin_addr: %s)", addressBuffer);
+}
+
+
+void printClientAtIndex(unsigned int index) {
+	printClientOneLine(clients[index].client, " ");
+}
+
+
+/*	Prints all clients in the clients array.
+*/
+void printClients() {
+	unsigned int index = 0;
+	
+	while(index != MAX_CLIENTS) {
+		if(!clients[index].empty) {
+			printf("clients[%d]:", index);
+			printClientAtIndex(index);
+			printf("\n");
 		}else {
-			struct Cliente nuevoCliente = {};
-			strcpy(nuevoCliente.Usuario, mensaje);
-			nuevoCliente.idSocket = dirCliente;
-			nuevoCliente.idSocketPers = clientSocketId;
-			//*Clientes=nuevoCliente;
-			insertarNuevoCliente(&nuevoCliente);
-			*contadorClientes += 1;
-			//imprimirClientes();
-			printf("%i\n", *contadorClientes);
-			printf("Se registro el Cliente:%s", mensaje);
-			strcat(respuesta, "Se recibio el msj");
+			//printf("\t<Empty slot>\n");
+		}
+		
+		index++;
+	}
+}
+
+
+/*	Recv's data from a client and handles it.
+*/
+void handleClientRecv(unsigned int clientIndex) {
+	if(clientIndex >= MAX_CLIENTS) {
+		fprintf(stderr, "ERROR: clientMessageRecvSendLoop(%u): client index >= MAX_CLIENTS.\n", clientIndex);
+		return;
+	}
+	
+	if(clients[clientIndex].empty) {
+		fprintf(stderr, "ERROR: clientMessageRecvSendLoop(%u): given client slot is empty.\n", clientIndex);
+		return;
+	}
+	
+	char recvBuffer[1024];
+	char sendBuffer[1024];
+	
+	unsigned int socketFd = clients[clientIndex].client.socketFd;
+	
+	int bytesReceived = recv(socketFd, recvBuffer, 1023, 0);
+	
+	if(bytesReceived < 0) {
+		fprintf(stderr, "ERROR: clientMessageRecvSendLoop(%u): error on recv.\n", clientIndex);
+		return;
+	}else if(bytesReceived == 0) {
+		printf("INFO: clientMessageRecvSendLoop: Received empty message from client at index %u. Closing connection.\n", clientIndex);
+		close(socketFd);
+		freeClientSlot(clientIndex);
+		return;
+	}
+	
+	// Mark the end of the received string:
+	recvBuffer[bytesReceived] = '\0';
+	
+	char * delimPosition = strchr(recvBuffer, ':');
+	
+	if(strcmp(recvBuffer, "$S") == 0) {
+		printf("INFO: clientMessageRecvSendLoop: Received close connection message from client at index %u. Closing connection.\n", clientIndex);
+		close(socketFd);
+		freeClientSlot(clientIndex);
+		return;
+	}else if(delimPosition != NULL) {
+		char * targetUsername = strtok(recvBuffer, ":");
+		char * textMessage = delimPosition + 1; //FIX: Limit the length of the text message.
+		
+		// size_t targetUsernameLength = strlen(targetUsername); //TODO: Check that targetUsername is not too long
+		
+		int targetClientIndex = findClientByUsername(targetUsername);
+		
+		if(targetClientIndex == -1) {
+			printf("clientMessageRecvSendLoop(%d): target client (%s) was not found.\n", clientIndex, targetUsername);
+		}else {
+			strcpy(sendBuffer, clients[clientIndex].client.username);
+			strcat(sendBuffer, ":");
+			strcat(sendBuffer, textMessage); //FIX: Properly check that the text message is not written outside the buffer.
+			
+			int targetClientSocketFd = clients[targetClientIndex].client.socketFd;
+			
+			printf("DEBUG: sending \"%s\" to client with username \"%s\".\n", sendBuffer, targetUsername);
+			int bytesSent = send(targetClientSocketFd, sendBuffer, strlen(sendBuffer) + 1, 0);
+			
+			if(bytesSent < 0) {
+				fprintf(stderr, "ERROR: clientMessageRecvSendLoop: could not send message to fd %d.\n", targetClientSocketFd);
+				// Maybe tell the sender that the message could not be delivered.
+			}
 		}
 	}else {
-		if(strchr(mensaje, ':') != NULL) {
-			char * usuario = strtok(mensaje, ":");
-			//printf("%s\n",usuario);
-			
-			char * msj = strtok(NULL, ":");
-			//printf("%s\n",msj);
-			
-			struct Cliente ClienteAEnviar = encontrarClienteUsuario(usuario);
-			struct Cliente ClienteEnviando = encontrarCliente(dirCliente.sin_port);
-			
-			printf("%s:%i\n", ClienteAEnviar.Usuario, ClienteAEnviar.idSocketPers);
-			
-			printf("New id Socket bef: %i\n", clientSocketId);
-			clientSocketId = ClienteAEnviar.idSocketPers;
-			printf("New id Socket af: %i\n",clientSocketId);
-			
-			strcat(respuesta, ClienteEnviando.Usuario);
-			strcat(respuesta, msj);
-		}else {
-			printf("Se entro a print\n");
-			//printf("%i",*contadorClientes);
-			struct Cliente posCliente = encontrarCliente(dirCliente.sin_port);
-			printf("%s:%s\n", posCliente.Usuario, mensaje);
-			strcat(respuesta, "Se recibio el msj");
-		}
+		fprintf(stderr, "ERROR: clientMessageRecvSendLoop(%u): Ignored unrecognized data received: \"%s\".\n", clientIndex, recvBuffer);
 	}
-	
-	printf("Se va a enviar a: %i\n", clientSocketId);
-	
-	n = send(clientSocketId, respuesta, strlen(respuesta), 0); // Se envia mensaje de exito al cliente
-	
-	if(n < 0) {
-		error("Error enviando inf a socket");
-	}
-	
-	bzero(respuesta, 50);
 }
 
+
+int receiveClientUsername(unsigned int clientIndex) {
+	if(clientIndex >= MAX_CLIENTS) {
+		fprintf(stderr, "ERROR: receiveClientUsername(%d): clientIndex >= MAX_CLIENTS.\n", clientIndex);
+		return 0;
+	}
+	
+	if(clients[clientIndex].empty) {
+		fprintf(stderr, "ERROR: receiveClientUsername(%d): Empty client slot.\n", clientIndex);
+		return 0;
+	}
+	
+	// Wait for the client to send the username request:
+	char recvBuffer[128];
+	int receivedBytes = recv(clients[clientIndex].client.socketFd, recvBuffer, 127, 0);
+	
+	printf("DEBUG: receiveClientUsername: '%s'\n", recvBuffer);
+	
+	if(receivedBytes == -1) {
+		fprintf(stderr, "ERROR: receiveClientUsername(%d): recv returned -1.\n", clientIndex);
+		return 0;
+	}
+	
+	int receivedUsernameLength = strlen(recvBuffer + 1); // + 1 to ignore the '#'
+	
+	//TODO: Change 50 to a macro, like CLIENT_USERNAME_SIZE
+	
+	if(recvBuffer[0] != '#' || receivedUsernameLength >= 50) {
+		fprintf(stderr, "ERROR: receiveClientUsername(%d): Invalid username request by client.\n", clientIndex);
+		return 0;
+	}
+	
+	if(isUsernameAlreadyUsed(recvBuffer + 1)) {
+		fprintf(stderr, "ERROR: receiveClientUsername(%d): Username was already taken: %s.\n", clientIndex, recvBuffer + 1);
+		return 0;
+	}
+	
+	// Write the received username to client.username
+	strcpy(clients[clientIndex].client.username, recvBuffer + 1);
+	
+	return 1;
+}
+
+
+void initializeClientsArray() {
+	// Mark all clients as empty:
+	for(unsigned int i = 0; i < MAX_CLIENTS; i++) {
+		clients[i] = EMPTY_CLIENT_SLOT;
+	}
+}
+
+
 int main(int argc, char * argv[]) {
-	contadorClientes = mmap(NULL, sizeof(* contadorClientes), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
-	Clientes = mmap(NULL, 20 * sizeof(struct Cliente), PROT_READ | PROT_WRITE, MAP_SHARED| MAP_ANONYMOUS, -1, 0);
+	// Clear out all client slots:
+	initializeClientsArray();
 	
-	strcpy(Clientes[0].Usuario, "PAas");
-	strcpy(Clientes[1].Usuario," PAasasdas");
+	int serverPort;
 	
-	int numeroPuerto, idSocket, forkID;
-	
-	// sockaddr_in es una strcutura de la netinite/in.h aqui se crean dos de ellas
-	struct sockaddr_in dirServer, dirCliente;
+	struct sockaddr_in serverAddress, clientAddress;
 	
 	if(argc < 2) {
-		fprintf(stderr, "No se dio un puerto\n");
+		fprintf(stderr, "ERROR: No server port given.\n");
 		exit(1);
 	}
 	
-	// socket() crea un nuevo socket AF_INET indica que se van a comunicar por internet, SOCK_STREAM es el tipo de socket que sera
-	idSocket = socket(AF_INET, SOCK_STREAM, 0);
-	if(idSocket < 0) {
-		error("Error iniciando socket");
+	// Create the server socket, IPv4, TCP.
+	int serverSocketFd = socket(PF_INET, SOCK_STREAM, 0);
+	
+	if(serverSocketFd < 0) {
+		fprintf(stderr, "ERROR: socket could not be created.\n");
+		exit(1);
 	}
 
-	numeroPuerto = atoi(argv[1]); // Se toma el argumento dado de puerto y se pasa a int
+	// Convert port number argument to int
+	serverPort = atoi(argv[1]);
 	
-	bzero((char *) &dirServer, sizeof(dirServer)); // Cambia el valor de dirServer a 0
+	// Zero out serverAddress, not really necessary: 
+	memset((char *) &serverAddress, 0, sizeof(serverAddress));
 	
-	dirServer.sin_family = AF_INET; // Se le asigna las propiedades necesaries a serv_addres
-	dirServer.sin_addr.s_addr = INADDR_ANY;
-	dirServer.sin_port = htons(numeroPuerto);
+	serverAddress.sin_family = AF_INET; // IPv4 socket address
+	serverAddress.sin_addr.s_addr = INADDR_ANY; // Listen to any incoming connection
+	serverAddress.sin_port = htons(serverPort); // Convert port number to network byte order
 	
 	// Assign the server's address to the socket
-	if(bind(idSocket, (struct sockaddr *) &dirServer, sizeof(dirServer)) < 0) {
-		error("Error conectando con cliente");
+	if(bind(serverSocketFd, (struct sockaddr *) &serverAddress, sizeof(serverAddress)) < 0) {
+		fprintf(stderr, "ERROR: Could not bind the server socket to the given port: %d.\n", serverPort);
+		exit(1);
 	}
+	
+	printf("INFO: Server bound to port \"%d\"\n", serverPort);
 
-	// Make the socket accept incoming connection requests
-	listen(idSocket, 5);
-	socklen_t clientAddressSize = sizeof(dirCliente);
+	// Mark the socket to be able to accept incoming connection requests
+	listen(serverSocketFd, 5);
+	
+	socklen_t clientAddressSize;
+	
+	// File descriptor sets for select():
+	fd_set readFdSet;
+	fd_set exceptFdSet;
+	
+	// Highest file descriptor value for select():
+	int highestFd = serverSocketFd;
 	
 	while(1) {
-		// Bloquea el programa hasta que un cliente se conecte al server:
-		int clientSocketId = accept(idSocket, (struct sockaddr *) &dirCliente, &clientAddressSize);
+		// NOTE: This is could be done more efficiently, by only FD_SET'ing the new fd,
+		//     and FD_ZERO'ing the closed connections.
 		
-		if(clientSocketId < 0) {
-			error("Error aceptando nuevo socket");
+		// Reset readFdSet and exceptFdSet to include only the connected clients, and the server socket:
+		FD_ZERO(&readFdSet);
+		FD_ZERO(&exceptFdSet);
+		FD_SET(serverSocketFd, &readFdSet);
+		FD_SET(serverSocketFd, &exceptFdSet);
+		
+		for(unsigned int clientIndex = 0; clientIndex < MAX_CLIENTS; clientIndex++) {
+			if(!clients[clientIndex].empty) {
+				// If this slot is not empty, add it to the sets for select:
+				int clientSocketFd = clients[clientIndex].client.socketFd;
+				FD_SET(clientSocketFd, &readFdSet);
+				FD_SET(clientSocketFd, &exceptFdSet);
+				
+				// Keep highestFd updated:
+				if(clientSocketFd > highestFd) {
+					highestFd = clientSocketFd;
+				}
+			}
 		}
 		
-		printf("New client connected with socket ID: %hu\n", clientSocketId);
+		// Wait for activity in one of the file descriptors in the readFdSet, indefinitely:
+		printf("\n\nINFO: Waiting with select() for any client activity.\n");
+		printClients();
+		int selectResult = select(highestFd + 1, &readFdSet, NULL, &exceptFdSet, NULL);
 		
-		forkID = fork();
-		
-		if(forkID < 0) {
-			error("Fork Fallo");
-		}else if(forkID == 0) {
-			// Child process
-			
-			// Close the server socket from the child process:
-			close(idSocket);
-			
-			while(1) {
-				loopConeccion(clientSocketId, dirCliente);
-			}
-
-			exit(0);
+		if(selectResult == -1 || selectResult == 0) {
+			fprintf(stderr, "ERROR: select() returned %d.\n", selectResult);
 		}else {
-			// Server process
+			if(FD_ISSET(serverSocketFd, &exceptFdSet)) {
+				fprintf(stderr, "ERROR: Exception on server socket.\n");
+				//TODO: closeAllConnections();
+				
+				close(serverSocketFd);
+				for(unsigned int clientIndex = 0; clientIndex < MAX_CLIENTS; clientIndex++) {
+					close(clients[clientIndex].client.socketFd);
+				}
+				
+				exit(1);
+			}
 			
-			// Close the client socket from the server process:
-			close(clientSocketId);
+			if(FD_ISSET(serverSocketFd, &readFdSet)) {
+				// Accept new incoming connection:
+				printf("INFO: accept()'ing client connection.\n");
+				clientAddressSize = sizeof(clientAddress);
+				
+				// Wait for the next client connection:
+				int clientSocketFd = accept(serverSocketFd, (struct sockaddr *) &clientAddress, &clientAddressSize);
+				
+				if(clientSocketFd < 0) {
+					fprintf(stderr, "ERROR: Could not accept a new client.\n");
+					exit(1); //TODO: Check if we could ignore this and keep going.
+				}
+				
+				printf("INFO: New client connected with socket FD: %hu.\n", clientSocketFd);
+				
+				// Try to insert the new client in the clients array:
+				int clientIndex = insertNewClient(clientSocketFd, clientAddress);
+				
+				if(clientIndex < 0) {
+					fprintf(stderr, "ERROR: Client rejected because there are no more client slots.\n");
+					
+					// Close the client socket:
+					close(clientSocketFd);
+				}
+			}
+			
+			for(unsigned int clientIndex = 0; clientIndex < MAX_CLIENTS; clientIndex++) {
+				if(!clients[clientIndex].empty) {
+					// Check if this client socket has sent anything:
+					int clientSocketFd = clients[clientIndex].client.socketFd;
+					
+					if(FD_ISSET(clientSocketFd, &exceptFdSet)) {
+						fprintf(stderr, "ERROR: clientSocketFd %d had an exception, closing connection.\n", clientSocketFd);
+						// Close the client socket, and free its slot:
+						close(clientSocketFd);
+						freeClientSlot(clientIndex);
+					}else if(FD_ISSET(clientSocketFd, &readFdSet)) {
+						int clientHasNoName = *(clients[clientIndex].client.username) == '\0';
+						
+						if(clientHasNoName) {
+							printf("INFO: calling receiveClientUsername(%d).\n", clientSocketFd);
+							int usernameWasSet = receiveClientUsername(clientIndex);
+							
+							if(!usernameWasSet) {
+								fprintf(stderr, "ERROR: Client at index %d did not ask for a valid username:\n", clientIndex);
+								printClientAtIndex(clientIndex);
+								
+								close(clientSocketFd);
+								freeClientSlot(clientIndex);
+							}
+						}else {
+							// Normal messages are handled here:
+							printf("INFO: calling handleClientRecv(%d).\n", clientSocketFd);
+							handleClientRecv(clientIndex);
+						}
+					}
+				}
+			}
 		}
 	}
 	
