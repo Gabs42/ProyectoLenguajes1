@@ -1,5 +1,5 @@
 
-GCC_OPTIONS = -Wall -Wextra
+GCC_OPTIONS = -Wall -Wextra -std=c11
 
 build: server client
 
