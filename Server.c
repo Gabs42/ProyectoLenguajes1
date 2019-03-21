@@ -8,6 +8,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <sys/mman.h>
+#include "IOHandler.h"
 
 
 struct Cliente{
@@ -211,7 +212,9 @@ int main(int argc, char *argv[])
      }
 
      bzero((char *) &dirServer, sizeof(dirServer));//cambia el valor de dirServer a 0
-     numeroPuerto = atoi(argv[1]);//se toma el argumento dado de puerto y se pasa a int
+     //numeroPuerto = atoi(argv[1]);//se toma el argumento dado de puerto y se pasa a int
+     numeroPuerto = readPortInt("server.conf");
+     printf("Puerto de archivo: %d\n", numeroPuerto);
      dirServer.sin_family = AF_INET;//se le asigna las propiedades necesaries a serv_addres
      dirServer.sin_addr.s_addr = INADDR_ANY;
      dirServer.sin_port = htons(numeroPuerto);

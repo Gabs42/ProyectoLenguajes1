@@ -91,6 +91,7 @@ char *readIP(char *buf, char *file)
 	fgets(buf, 10, ptr_file);
 
 	fclose(ptr_file);
+	return buf;
 }
 
 //TO-DO documentation
@@ -130,8 +131,8 @@ int writeIP(char* ptr_IP, char* file)
 	return 0;
 }
 
-int main()
-{
+
+
 /*
 	char *wPort = "34";
 	writePort(wPort, "server.conf");
@@ -155,10 +156,15 @@ int main()
 	printf("%s\n", rIP);
 */
 /*
+	char *rIP;
+	char buf[10];
+	rIP = readIP(buf, "server.conf");
+	printf("IP: %s\n", rIP);
+*/
+/*
 	char *wIP = "8.8.8.8";
 	writeIP(wIP, "server.conf");
-*/
-	return 0;
-}
+*/	
+
 
 

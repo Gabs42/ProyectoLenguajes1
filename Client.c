@@ -8,6 +8,7 @@
 #include <netdb.h>
 #include <signal.h>
 #include <sys/ioctl.h>
+#include "IOHandler.h"
 
 #define Green "\x1B[32m"
 
@@ -29,11 +30,14 @@ int main(int argc, char *argv[])
     if (argc < 3) {
        exit(0);
     }
-    numeroPuerto = atoi(argv[2]);//se consigue el numero de puerto del input
+    //numeroPuerto = atoi(argv[2]);//se consigue el numero de puerto del input
+    numeroPuerto = readPortInt("client.conf");
     idSocket = socket(AF_INET, SOCK_STREAM, 0);
     if (idSocket < 0)
-        error("Error iniciando socket");
-    server = gethostbyname(argv[1]);//con el nombre del host se obtiene el host,.
+        error("Error iniciando socket");    
+    //server = gethostbyname(argv[1]);//con el nombre del host se obtiene el host
+    char buf[10];
+    server = gethostbyname(readIP(buf, "client.conf"));
     if (server == NULL) {
         fprintf(stderr,"Error, server no existe\n");
         exit(0);
