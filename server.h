@@ -13,7 +13,7 @@
 #include <sys/select.h>
 
 
-#define MAX_CLIENTS 100
+#define MAX_CLIENTS 128
 
 
 struct Client {

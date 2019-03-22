@@ -139,7 +139,7 @@ int main(int argc, char * argv[]) {
                 fprintf(stderr, "ERROR: recv failed.");
                 exit(1);
             }else {
-                fprintf(stdout, ANSI_TERMINAL_GREEN "%*s\n" ANSI_TERMINAL_RESET, terminalWindowInfo.ws_col, recvBuffer);
+                fprintf(stdout, ANSI_TERMINAL_GREEN "%*s" ANSI_TERMINAL_RESET "\n", terminalWindowInfo.ws_col - 1, recvBuffer);
             }
         }
     }else {
