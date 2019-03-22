@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "IOHandler.h"
+#include <string.h>
 
 //TO-DO add documentation
 int writePort(char *ptr_port, char *file)
@@ -41,16 +42,16 @@ int writePort(char *ptr_port, char *file)
 	return 0;
 }
 
-//Recives an int to be written as a port        MUST CHANGE
+//Receives an int to be written as a port        MUST CHANGE
 //Does a conversion to string and uses writePort()
-int writePortInt(int port, char *file)
+void writePortInt(int port, char *file)
 {
 	char strPort[10];
 	sprintf(strPort, "%d", port);
 	writePort(strPort, file);
 }
 
-//Recieves a char[] of a given size, and assigns it a value taken from "port.txt" MUST CHANGE
+//Receives a char[] of a given size, and assigns it a value taken from "port.txt" MUST CHANGE
 char *readPort(char *buf, char *file)
 {
 	FILE *ptr_file;
@@ -62,15 +63,17 @@ char *readPort(char *buf, char *file)
 		return NULL;
 	}	
 
-	fgets(buf, 10, ptr_file);
+	fgets(buf, 1024, ptr_file);
 
 	fclose(ptr_file);
+    
+    return buf;
 }
 
 //Converts the result of readPort to int and returns the value; MUST CHANGE
 int readPortInt(char *file)
 {
-	char rPort[10]; 
+	char rPort[1024]; 
 	readPort(rPort, file);
 	return (int) strtol(rPort, (char **)NULL, 10);
 }
@@ -87,8 +90,14 @@ char *readIP(char *buf, char *file)
 		return NULL;
 	}	
 
-	fgets(buf, 10, ptr_file);
-	fgets(buf, 10, ptr_file);
+	fgets(buf, 1024, ptr_file);
+	fgets(buf, 1024, ptr_file);
+    
+    // Cut buf at the first whitespace:
+    strtok(buf, "\n");
+    strtok(buf, "\r");
+    strtok(buf, "\t");
+    strtok(buf, " ");
 
 	fclose(ptr_file);
 	return buf;

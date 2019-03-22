@@ -20,6 +20,15 @@
 #define ANSI_TERMINAL_RESET "\x1B[0m"
 
 
+/*  Prints the given IPv4 stored in network byte order in
+    presentation format.
+    
+    Example: The address 0x7F, 0x00, 0x00, 0x01 is printed as "127.0.0.1".
+*/
+void printNetworkIPv4Address(char * address) {
+    printf("%d.%d.%d.%d", address[0], address[1], address[2], address[3]);
+}
+
 int main(int argc, char * argv[]) {
     if(argc > 1) {
         printf("Server port and address configuration is read from the \"client.conf\" file.\n");
@@ -53,8 +62,9 @@ int main(int argc, char * argv[]) {
         exit(1);
     }
     
-    
     // Try to get the server's address (and other info):
+    printf("INFO: Getting the ip address for \"%s\".\n", serverHostname);
+    
     serverInfo = gethostbyname(serverHostname); // TODO: Replace with getaddrinfo()
     
     if(serverInfo == NULL) {
@@ -62,6 +72,10 @@ int main(int argc, char * argv[]) {
         exit(1);
     }
     
+    // Show what server address will be used for the connection:
+    printf("INFO: Server address for \"%s\": ", serverHostname);
+    printNetworkIPv4Address(serverInfo->h_addr_list[0]);
+    printf("\n");
     
     memset(&serverAddress, 0, sizeof(serverAddress)); // Not really necessary.
     
